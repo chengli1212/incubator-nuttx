@@ -35,6 +35,11 @@
 
 /* ESP32-S3-DEVKIT GPIOs ****************************************************/
 
+/* LCD pins, i.e. used by ST7735 */
+
+#define GPIO_LCD_DC         14
+#define GPIO_LCD_RST        9
+
 /* BOOT Button */
 
 #define BUTTON_BOOT  0
@@ -114,6 +119,18 @@ int board_i2c_init(void);
 
 #ifdef CONFIG_SENSORS_BMP180
 int board_bmp180_initialize(int devno, int busno);
+#endif
+
+/****************************************************************************
+ * Name: esp32s3_djoy_initialize
+ *
+ * Description:
+ *   Initialize and register the discrete joystick driver
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_INPUT_DJOYSTICK
+int esp32s3_djoy_initialize(void);
 #endif
 
 #endif /* __ASSEMBLY__ */

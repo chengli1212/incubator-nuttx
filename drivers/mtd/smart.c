@@ -37,12 +37,11 @@
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
-
-#include <crc8.h>
-#include <crc16.h>
-#include <crc32.h>
 #include <debug.h>
 
+#include <nuttx/crc8.h>
+#include <nuttx/crc16.h>
+#include <nuttx/crc32.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/ioctl.h>
@@ -2192,8 +2191,7 @@ static int smart_scan(FAR struct smart_struct_s *dev)
             {
               if (dev->partname[0] != '\0')
                 {
-                  snprintf(dev->rwbuffer, sizeof(devname),
-                           "/dev/smart%d%sd%d",
+                  snprintf(devname, sizeof(devname), "/dev/smart%d%sd%d",
                            dev->minor, dev->partname, x + 1);
                 }
               else
@@ -2219,8 +2217,6 @@ static int smart_scan(FAR struct smart_struct_s *dev)
 
               rootdirdev->dev = dev;
               rootdirdev->rootdirnum = x;
-              ret = register_blockdriver(dev->rwbuffer, &g_bops, 0,
-                                         rootdirdev);
 
               /* Inode private data is a reference to the SMART device
                * structure.
@@ -5755,7 +5751,7 @@ static int smart_fsck_file(FAR struct smart_struct_s *dev,
 
       /* next logical sector */
 
-      logsector = *(uint16_t *)chain->nextsector;
+      logsector = SMARTFS_NEXTSECTOR(chain);
     }
   while (logsector != 0xffff);
 
@@ -5883,7 +5879,7 @@ static int smart_fsck_directory(FAR struct smart_struct_s *dev,
 
   /* Check next sector recursively */
 
-  nextsector = *(uint16_t *)chain->nextsector;
+  nextsector = SMARTFS_NEXTSECTOR(chain);
 
   if (nextsector != 0xffff)
     {
@@ -5897,7 +5893,7 @@ static int smart_fsck_directory(FAR struct smart_struct_s *dev,
 
           ferr("Invalidate next log sector %d\n", nextsector);
 
-          *(uint16_t *)chain->nextsector = 0xffff;
+          SMARTFS_SET_NEXTSECTOR(chain, 0xffff);
 
           /* Set flag to relocate later */
 
@@ -5932,10 +5928,9 @@ static int smart_fsck_directory(FAR struct smart_struct_s *dev,
         }
 
 #ifdef CONFIG_DEBUG_FS_INFO
-      strncpy(entryname,
+      strlcpy(entryname,
               (const char *) (cur + sizeof(struct smart_entry_header_s)),
-              dev->namesize);
-      entryname[dev->namesize] = '\0';
+              sizeof(entryname));
       finfo("Check entry (name=%s flags=%02x logsector=%02x)\n",
             entryname, entry->flags, entry->firstsector);
 #endif
@@ -6214,7 +6209,7 @@ int smart_initialize(int minor, FAR struct mtd_dev_s *mtd,
       dev->namesize = CONFIG_SMARTFS_MAXNAMLEN;
       if (partname)
         {
-          strncpy(dev->partname, partname, SMART_PARTNAME_SIZE);
+          strlcpy(dev->partname, partname, SMART_PARTNAME_SIZE);
         }
       else
         {

@@ -461,7 +461,7 @@ static int_fast64_t detzcode64(FAR const char *codep)
   result = (codep[0] & 0x80) ? -1 : 0;
   for (i = 0; i < 8; ++i)
     {
-      result = (result << 8) | (codep[i] & 0xff);
+      result = (result * 256) | (codep[i] & 0xff);
     }
 
   return result;
@@ -1613,13 +1613,12 @@ static int tzparse(FAR const char *name, FAR struct state_s *sp,
     }
 
   cp = sp->chars;
-  strncpy(cp, stdname, stdlen);
+  stdlen += 1;
+  strlcpy(cp, stdname, stdlen);
   cp += stdlen;
-  *cp++ = '\0';
   if (dstlen != 0)
     {
-      strncpy(cp, dstname, dstlen);
-      *(cp + dstlen) = '\0';
+      strlcpy(cp, dstname, dstlen + 1);
     }
 
   return 0;

@@ -1285,7 +1285,7 @@ static int format_scan_result_to_wapi(struct iwreq *req, int result_cnt)
 
   DEBUGASSERT(j == result_cnt);
 
-  /* sort the vaild list according the rssi */
+  /* sort the valid list according the rssi */
 
   qsort(rssi_list, result_cnt, sizeof(uint8_t), rssi_compare);
 
@@ -1610,8 +1610,7 @@ bl602_net_ioctl(struct net_driver_s *dev, int cmd, unsigned long arg)
               return -ENOMEM;
             }
 
-          strncpy(passphrase, (char *)ext->key, ext->key_len);
-          passphrase[ext->key_len] = 0;
+          strlcpy(passphrase, (char *)ext->key, ext->key_len + 1);
 
           wifi_mgmr_sta_passphr_set(passphrase);
           kmm_free(passphrase);

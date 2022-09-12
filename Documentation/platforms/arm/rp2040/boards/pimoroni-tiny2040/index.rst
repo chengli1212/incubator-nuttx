@@ -46,9 +46,10 @@ on the RP2040.
 
 Pin Mapping
 ===========
+Pads numbered anticlockwise from USB connector.
 
 ===== ========== ==========
-Pin   Signal     Notes
+Pad   Signal     Notes
 ===== ========== ==========
 1     VBUS       Connected to USB +5V
 2     Ground
@@ -95,6 +96,12 @@ nsh
 ---
 
 Basic NuttShell configuration (console enabled in UART0, at 115200 bps).
+
+nsh-flash
+---------
+
+Basic NuttShell configuration (console enabled in UART0, at 115200 bps
+with SMART flash filesystem.
 
 nshsram
 -------

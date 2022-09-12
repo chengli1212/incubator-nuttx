@@ -58,6 +58,10 @@
 #  include <nuttx/input/buttons.h>
 #endif
 
+#ifdef CONFIG_VIDEO_FB
+#include <nuttx/video/fb.h>
+#endif
+
 #include "esp32s3-devkit.h"
 
 /****************************************************************************
@@ -162,11 +166,33 @@ int esp32s3_bringup(void)
     }
 #endif
 
+#ifdef CONFIG_INPUT_DJOYSTICK
+  ret = esp32s3_djoy_initialize();
+  if (ret != OK)
+    {
+      syslog(LOG_ERR, "Failed to register djoystick driver: %d\n", ret);
+    }
+#endif
+
 #ifdef CONFIG_ESP32S3_SPIFLASH
   ret = board_spiflash_init();
   if (ret)
     {
       syslog(LOG_ERR, "ERROR: Failed to initialize SPI Flash\n");
+    }
+#endif
+
+#ifdef CONFIG_VIDEO_FB
+  ret = fb_register(0, 0);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to initialize Frame Buffer Driver.\n");
+    }
+#elif defined(CONFIG_LCD)
+  ret = board_lcd_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to initialize LCD.\n");
     }
 #endif
 

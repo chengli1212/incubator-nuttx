@@ -55,9 +55,10 @@ the power.
 
 Pin Mapping
 ===========
+Pads numbered anticlockwise from USB connector.
 
 ===== ========== ==========
-Pin   Signal     Notes
+Pad   Signal     Notes
 ===== ========== ==========
 1     Reset      Pull to ground to reset the RP2040 processor.
 2     3.3V       Power out to peripherals.
@@ -154,6 +155,12 @@ nsh
 ---
 
 Basic NuttShell configuration (console enabled in UART0, at 115200 bps).
+
+nsh-flash
+---------
+
+Basic NuttShell configuration (console enabled in UART0, at 115200 bps
+with SMART flash filesystem.
 
 nshsram
 -------

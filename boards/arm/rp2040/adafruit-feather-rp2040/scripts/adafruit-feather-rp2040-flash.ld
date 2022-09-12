@@ -20,7 +20,7 @@
 
 MEMORY
 {
-  flash (rx) : ORIGIN = 0x10000000, LENGTH = 2048K
+  flash (rx) : ORIGIN = 0x10000000, LENGTH = 8192K
   sram (rwx) : ORIGIN = 0x20000000, LENGTH = 264K
 }
 
@@ -82,10 +82,16 @@ SECTIONS
         _sdata = ABSOLUTE(.);
         *(.data .data.*)
         *(.gnu.linkonce.d.*)
+        *(.ram_code.*)
         CONSTRUCTORS
         . = ALIGN(4);
         _edata = ABSOLUTE(.);
     } > sram AT > flash
+
+    .flash_section : {
+        . = ALIGN(4*1024);
+        *(.flash.*)
+    } > flash
 
     .bss : {
         _sbss = ABSOLUTE(.);

@@ -60,6 +60,12 @@
 #ifdef CONFIG_ARCH_STACKDUMP
 
 /****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+static uint8_t s_last_regs[XCPTCONTEXT_SIZE];
+
+/****************************************************************************
  * Private Functions
  ****************************************************************************/
 
@@ -202,10 +208,7 @@ static void arm_dump_task(struct tcb_s *tcb, void *arg)
 #endif
          "   %7lu"
 #ifdef CONFIG_STACK_COLORATION
-         "   %7lu"
-#endif
-#ifdef CONFIG_STACK_COLORATION
-         "   %3" PRId32 ".%1" PRId32 "%%%c"
+         "   %7lu   %3" PRId32 ".%1" PRId32 "%%%c"
 #endif
 #ifdef CONFIG_SCHED_CPULOAD
          "   %3" PRId32 ".%01" PRId32 "%%"
@@ -218,8 +221,6 @@ static void arm_dump_task(struct tcb_s *tcb, void *arg)
          , (unsigned long)tcb->adj_stack_size
 #ifdef CONFIG_STACK_COLORATION
          , (unsigned long)up_check_tcbstack(tcb)
-#endif
-#ifdef CONFIG_STACK_COLORATION
          , stack_filled / 10, stack_filled % 10
          , (stack_filled >= 10 * 80 ? '!' : ' ')
 #endif
@@ -275,12 +276,9 @@ static void arm_showtasks(void)
 #ifdef CONFIG_SMP
          "   CPU"
 #endif
-#ifdef CONFIG_STACK_COLORATION
-         "      USED"
-#endif
          "     STACK"
 #ifdef CONFIG_STACK_COLORATION
-         "   FILLED "
+         "      USED   FILLED "
 #endif
 #ifdef CONFIG_SCHED_CPULOAD
          "      CPU"
@@ -292,25 +290,17 @@ static void arm_showtasks(void)
 #  ifdef CONFIG_SMP
          "  ----"
 #  endif
+         "   %7u"
 #  ifdef CONFIG_STACK_COLORATION
-         "   %7lu"
-#  endif
-         "   %7lu"
-#  ifdef CONFIG_STACK_COLORATION
-         "   %3" PRId32 ".%1" PRId32 "%%%c"
+         "   %7" PRId32 "   %3" PRId32 ".%1" PRId32 "%%%c"
 #  endif
 #  ifdef CONFIG_SCHED_CPULOAD
          "     ----"
 #  endif
-#  if CONFIG_TASK_NAME_SIZE > 0
-         "   irq"
-#  endif
-         "\n"
+         "   irq\n"
+         , (CONFIG_ARCH_INTERRUPTSTACK & ~7)
 #  ifdef CONFIG_STACK_COLORATION
-         , (unsigned long)stack_used
-#  endif
-         , (unsigned long)(CONFIG_ARCH_INTERRUPTSTACK & ~7)
-#  ifdef CONFIG_STACK_COLORATION
+         , stack_used
          , stack_filled / 10, stack_filled % 10,
          (stack_filled >= 10 * 80 ? '!' : ' ')
 #  endif
@@ -368,10 +358,24 @@ static void arm_dump_stack(const char *tag, uint32_t sp,
   else
     {
       _alert("ERROR: %s Stack pointer is not within the stack\n", tag);
-
       if (force)
         {
-          arm_stackdump(base, top);
+#ifdef CONFIG_STACK_COLORATION
+          uint32_t remain;
+
+          remain = size - arm_stack_check((FAR void *)(uintptr_t)base, size);
+          base  += remain;
+          size  -= remain;
+#endif
+
+#if CONFIG_ARCH_STACKDUMP_MAX_LENGTH > 0
+          if (size > CONFIG_ARCH_STACKDUMP_MAX_LENGTH)
+            {
+              size = CONFIG_ARCH_STACKDUMP_MAX_LENGTH;
+            }
+#endif
+
+          arm_stackdump(base, base + size);
         }
     }
 }
@@ -385,12 +389,6 @@ static void arm_dumpstate(void)
   struct tcb_s *rtcb = running_task();
   uint32_t sp = up_getsp();
 
-  /* Show back trace */
-
-#ifdef CONFIG_SCHED_BACKTRACE
-  sched_dumpstack(rtcb->pid);
-#endif
-
   /* Update the xcp context */
 
   if (CURRENT_REGS)
@@ -399,8 +397,15 @@ static void arm_dumpstate(void)
     }
   else
     {
-      up_saveusercontext(rtcb->xcp.regs);
+      up_saveusercontext(s_last_regs);
+      rtcb->xcp.regs = (uint32_t *)s_last_regs;
     }
+
+  /* Show back trace */
+
+#ifdef CONFIG_SCHED_BACKTRACE
+  sched_dumpstack(rtcb->pid);
+#endif
 
   /* Dump the registers */
 
@@ -469,21 +474,22 @@ static void arm_assert(void)
 
   if (CURRENT_REGS || (running_task())->flink == NULL)
     {
+#if CONFIG_BOARD_RESET_ON_ASSERT >= 1
+      board_reset(CONFIG_BOARD_ASSERT_RESET_VALUE);
+#endif
+
       /* Disable interrupts on this CPU */
 
       up_irq_save();
 
+#ifdef CONFIG_SMP
+      /* Try (again) to stop activity on other CPUs */
+
+      spin_trylock(&g_cpu_irqlock);
+#endif
+
       for (; ; )
         {
-#ifdef CONFIG_SMP
-          /* Try (again) to stop activity on other CPUs */
-
-          spin_trylock(&g_cpu_irqlock);
-#endif
-
-#if CONFIG_BOARD_RESET_ON_ASSERT >= 1
-          board_reset(CONFIG_BOARD_ASSERT_RESET_VALUE);
-#endif
 #ifdef CONFIG_ARCH_LEDS
           /* FLASH LEDs a 2Hz */
 

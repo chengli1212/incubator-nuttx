@@ -212,42 +212,52 @@ static int lcdfb_updateearea(FAR struct fb_vtable_s *vtable,
           startx &= ~(pixperbyte - 1);
         }
 
-      width = endx - startx + 1;
-
       /* Get the starting position in the framebuffer */
 
       run  = priv->fbmem + starty * priv->stride;
       run += (startx * pinfo->bpp + 7) >> 3;
     }
 
-  /* Update the whole screen? */
-
-  if (startx == 0 && endx == priv->xres - 1 &&
-      starty == 0 && endy == priv->yres - 1)
+  if (pinfo->putarea != NULL)
     {
-      /* Yes, LCD driver support putarea callback? */
+      /* Each Driver's callback function putarea may be optimized by checking
+       * if it is a full screen/full row mode or not.
+       * In case of full screen/row mode the memory layout of drivers memory
+       * and data provided to putarea function may be (or not, it depends of
+       * display and driver implementation) identical.
+       * Identical memory layout let us to use:
+       * - memcopy (if there is shadow buffer in driver implementation)
+       * - apply DMA channel to transfer data to driver memory.
+       */
 
-      if (pinfo->putarea != NULL)
+      ret = pinfo->putarea(pinfo->dev, starty, endy, startx, endx,
+                           run, priv->stride);
+      if (ret < 0)
         {
-          /* Yes, go the fast path */
+          lcderr("Failed to update area");
+          return ret;
+        }
+    }
+  else
+    {
+      width = endx - startx + 1;
 
-          return pinfo->putarea(pinfo->dev, starty, endy, startx, endx, run);
+      for (row = starty; row <= endy; row++)
+        {
+          ret = pinfo->putrun(pinfo->dev, row, startx, run, width);
+          if (ret < 0)
+            {
+              lcderr("Failed to update row");
+              return ret;
+            }
+
+          run += priv->stride;
         }
     }
 
-  for (row = starty; row <= endy; row++)
+  if (pinfo->redraw != NULL)
     {
-      /* REVISIT: Some LCD hardware certain alignment requirements on DMA
-       * memory.
-       */
-
-      ret = pinfo->putrun(pinfo->dev, row, startx, run, width);
-      if (ret < 0)
-        {
-          return ret;
-        }
-
-      run += priv->stride;
+      pinfo->redraw(pinfo->dev);
     }
 
   return OK;

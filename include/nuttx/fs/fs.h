@@ -33,6 +33,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <time.h>
+#include <dirent.h>
 
 #include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
@@ -148,13 +149,6 @@
 #define INODE_SET_SOFTLINK(i) INODE_SET_TYPE(i,FSNODEFLAG_TYPE_SOFTLINK)
 #define INODE_SET_SOCKET(i)   INODE_SET_TYPE(i,FSNODEFLAG_TYPE_SOCKET)
 
-/* Mountpoint fd_flags values */
-
-#define DIRENTFLAGS_PSEUDONODE 1
-
-#define DIRENT_SETPSEUDONODE(f) do (f) |= DIRENTFLAGS_PSEUDONODE; while (0)
-#define DIRENT_ISPSEUDONODE(f) (((f) & DIRENTFLAGS_PSEUDONODE) != 0)
-
 /* The status change flags.
  * These should be or-ed together to figure out what want to change.
  */
@@ -180,8 +174,28 @@ struct inode;
 struct stat;
 struct statfs;
 struct pollfd;
-struct fs_dirent_s;
 struct mtd_dev_s;
+
+/* The internal representation of type DIR is just a container for an inode
+ * reference, and the path of directory.
+ */
+
+struct fs_dirent_s
+{
+  /* This is the node that was opened by opendir.  The type of the inode
+   * determines the way that the readdir() operations are performed. For the
+   * pseudo root pseudo-file system, it is also used to support rewind.
+   *
+   * We hold a reference on this inode so we know that it will persist until
+   * closedir() is called (although inodes linked to this inode may change).
+   */
+
+  FAR struct inode *fd_root;
+
+  /* The path name of current directory for FIOC_FILEPATH */
+
+  FAR char *fd_path;
+};
 
 /* This structure is provided by devices when they are registered with the
  * system.  It is used to call back to perform device specific operations.
@@ -194,7 +208,7 @@ struct file_operations
   int     (*open)(FAR struct file *filep);
 
   /* The following methods must be identical in signature and position
-   * because the struct file_operations and struct mountp_operations are
+   * because the struct file_operations and struct mountpt_operations are
    * treated like unions.
    */
 
@@ -308,11 +322,11 @@ struct mountpt_operations
   /* Directory operations */
 
   int     (*opendir)(FAR struct inode *mountpt, FAR const char *relpath,
-            FAR struct fs_dirent_s *dir);
+            FAR struct fs_dirent_s **dir);
   int     (*closedir)(FAR struct inode *mountpt,
             FAR struct fs_dirent_s *dir);
   int     (*readdir)(FAR struct inode *mountpt,
-            FAR struct fs_dirent_s *dir);
+            FAR struct fs_dirent_s *dir, FAR struct dirent *entry);
   int     (*rewinddir)(FAR struct inode *mountpt,
             FAR struct fs_dirent_s *dir);
 
@@ -973,6 +987,44 @@ int open_blockdriver(FAR const char *pathname, int mountflags,
 int close_blockdriver(FAR struct inode *inode);
 
 /****************************************************************************
+ * Name: find_mtddriver
+ *
+ * Description:
+ *   Return the inode of the named MTD driver specified by 'pathname'
+ *
+ * Input Parameters:
+ *   pathname   - the full path to the named MTD driver to be located
+ *   ppinode    - address of the location to return the inode reference
+ *
+ * Returned Value:
+ *   Returns zero on success or a negated errno on failure:
+ *
+ *   ENOENT  - No MTD driver of this name is registered
+ *   ENOTBLK - The inode associated with the pathname is not an MTD driver
+ *
+ ****************************************************************************/
+
+int find_mtddriver(FAR const char *pathname, FAR struct inode **ppinode);
+
+/****************************************************************************
+ * Name: close_mtddriver
+ *
+ * Description:
+ *   Release the inode got by function find_mtddriver()
+ *
+ * Input Parameters:
+ *   pinode    - pointer to the inode
+ *
+ * Returned Value:
+ *   Returns zero on success or a negated errno on failure:
+ *
+ *   EINVAL  - inode is NULL
+ *
+ ****************************************************************************/
+
+int close_mtddriver(FAR struct inode *pinode);
+
+/****************************************************************************
  * Name: fs_fdopen
  *
  * Description:
@@ -1396,7 +1448,7 @@ int nx_stat(FAR const char *path, FAR struct stat *buf, int resolve);
  * Input Parameters:
  *   filep  - File structure instance
  *   buf    - The stat to be modified
- *   flags  - The vaild field in buf
+ *   flags  - The valid field in buf
  *
  * Returned Value:
  *   Upon successful completion, 0 shall be returned. Otherwise, the

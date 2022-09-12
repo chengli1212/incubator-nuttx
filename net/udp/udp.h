@@ -69,6 +69,7 @@
 /* Definitions for the UDP connection struct flag field */
 
 #define _UDP_FLAG_CONNECTMODE (1 << 0) /* Bit 0:  UDP connection-mode */
+#define _UDP_FLAG_PKTINFO     (1 << 1) /* Bit 1:  UDP PKTINFO */
 
 #define _UDP_ISCONNECTMODE(f) (((f) & _UDP_FLAG_CONNECTMODE) != 0)
 
@@ -112,10 +113,6 @@ struct udp_conn_s
   uint8_t  ttl;           /* Default time-to-live */
   uint8_t  crefs;         /* Reference counts on this instance */
 
-#ifdef CONFIG_NET_UDP_BINDTODEVICE
-  uint8_t  boundto;       /* Index of the interface we are bound to.
-                           * Unbound: 0, Bound: 1-MAX_IFINDEX */
-#endif
 #if CONFIG_NET_RECV_BUFSIZE > 0
   int32_t  rcvbufs;       /* Maximum amount of bytes queued in recv */
 #endif
@@ -473,6 +470,28 @@ FAR struct udp_wrbuffer_s *udp_wrbuffer_alloc(void);
 #endif /* CONFIG_NET_UDP_WRITE_BUFFERS */
 
 /****************************************************************************
+ * Name: udp_wrbuffer_timedalloc
+ *
+ * Description:
+ *   Allocate a UDP write buffer by taking a pre-allocated buffer from
+ *   the free list.  This function is called from udp logic when a buffer
+ *   of udp data is about to sent
+ *   This function is wrapped version of udp_wrbuffer_alloc(),
+ *   this wait will be terminated when the specified timeout expires.
+ *
+ * Input Parameters:
+ *   timeout   - The relative time to wait until a timeout is declared.
+ *
+ * Assumptions:
+ *   Called from user logic with the network locked.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NET_UDP_WRITE_BUFFERS
+FAR struct udp_wrbuffer_s *udp_wrbuffer_timedalloc(unsigned int timeout);
+#endif /* CONFIG_NET_UDP_WRITE_BUFFERS */
+
+/****************************************************************************
  * Name: udp_wrbuffer_tryalloc
  *
  * Description:
@@ -671,11 +690,8 @@ uint16_t udp_callback(FAR struct net_driver_s *dev,
  *
  * Input Parameters:
  *   psock    Pointer to the socket structure for the SOCK_DRAM socket
- *   buf      Buffer to receive data
- *   len      Length of buffer
+ *   msg      Receive info and buffer for receive data
  *   flags    Receive flags
- *   from     INET address of source (may be NULL)
- *   fromlen  The length of the address structure
  *
  * Returned Value:
  *   On success, returns the number of characters received.  On  error,
@@ -685,9 +701,8 @@ uint16_t udp_callback(FAR struct net_driver_s *dev,
  *
  ****************************************************************************/
 
-ssize_t psock_udp_recvfrom(FAR struct socket *psock, FAR void *buf,
-                           size_t len, int flags, FAR struct sockaddr *from,
-                           FAR socklen_t *fromlen);
+ssize_t psock_udp_recvfrom(FAR struct socket *psock, FAR struct msghdr *msg,
+                           int flags);
 
 /****************************************************************************
  * Name: psock_udp_sendto
@@ -921,12 +936,10 @@ int udp_txdrain(FAR struct socket *psock, unsigned int timeout);
  *   conn     The TCP connection of interest
  *   cmd      The ioctl command
  *   arg      The argument of the ioctl cmd
- *   arglen   The length of 'arg'
  *
  ****************************************************************************/
 
-int udp_ioctl(FAR struct udp_conn_s *conn,
-              int cmd, FAR void *arg, size_t arglen);
+int udp_ioctl(FAR struct udp_conn_s *conn, int cmd, unsigned long arg);
 
 /****************************************************************************
  * Name: udp_sendbuffer_notify

@@ -31,17 +31,10 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/mm/mm.h>
+#include <nuttx/sched.h>
 
 #include "mm_heap/mm.h"
 #include "kasan/kasan.h"
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef NULL
-#  define NULL ((void *)0)
-#endif
 
 /****************************************************************************
  * Private Functions
@@ -82,6 +75,18 @@ static void mm_free_delaylist(FAR struct mm_heap_s *heap)
 #endif
 }
 
+#if CONFIG_MM_BACKTRACE >= 0
+void mm_dump_handler(FAR struct tcb_s *tcb, FAR void *arg)
+{
+  struct mallinfo_task info;
+
+  info.pid = tcb->pid;
+  mm_mallinfo_task(arg, &info);
+  mwarn("pid:%5d, used:%10d, nused:%10d\n",
+        tcb->pid, info.uordblks, info.aordblks);
+}
+#endif
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -103,6 +108,7 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
   size_t alignsize;
   FAR void *ret = NULL;
   int ndx;
+  bool val;
 
   /* Free the delay list first */
 
@@ -132,7 +138,8 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
 
   /* We need to hold the MM semaphore while we muck with the nodelist. */
 
-  DEBUGVERIFY(mm_takesemaphore(heap));
+  val = mm_takesemaphore(heap);
+  DEBUGASSERT(val);
 
   /* Get the location in the node list to start the search. Special case
    * really big allocations
@@ -224,7 +231,6 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
       /* Handle the case of an exact size match */
 
       node->preceding |= MM_ALLOC_BIT;
-      MM_ADD_BACKTRACE(heap, node);
       ret = (FAR void *)((FAR char *)node + SIZEOF_MM_ALLOCNODE);
     }
 
@@ -233,6 +239,7 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
 
   if (ret)
     {
+      MM_ADD_BACKTRACE(heap, node);
       kasan_unpoison(ret, mm_malloc_size(ret));
 #ifdef CONFIG_MM_FILL_ALLOCATIONS
       memset(ret, 0xaa, alignsize - SIZEOF_MM_ALLOCNODE);
@@ -254,7 +261,9 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
       mwarn("Total:%d, used:%d, free:%d, largest:%d, nused:%d, nfree:%d\n",
             minfo.arena, minfo.uordblks, minfo.fordblks,
             minfo.mxordblk, minfo.aordblks, minfo.ordblks);
-      mm_memdump(heap, -1);
+#  if CONFIG_MM_BACKTRACE >= 0
+      nxsched_foreach(mm_dump_handler, heap);
+#  endif
 #endif
 #ifdef CONFIG_MM_PANIC_ON_FAILURE
       PANIC();

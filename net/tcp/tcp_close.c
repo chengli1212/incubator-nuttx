@@ -53,15 +53,9 @@ static void tcp_close_work(FAR void *param)
 
   net_lock();
 
-  tcp_callback_free(conn, conn->clscb);
-
   /* Stop the network monitor for all sockets */
 
   tcp_stop_monitor(conn, TCP_CLOSE);
-
-  /* Discard our reference to the connection */
-
-  conn->crefs = 0;
   tcp_free(conn);
 
   net_unlock();
@@ -72,8 +66,7 @@ static void tcp_close_work(FAR void *param)
  ****************************************************************************/
 
 static uint16_t tcp_close_eventhandler(FAR struct net_driver_s *dev,
-                                       FAR void *pvconn, FAR void *pvpriv,
-                                       uint16_t flags)
+                                       FAR void *pvpriv, uint16_t flags)
 {
   FAR struct tcp_conn_s *conn = pvpriv;
 
@@ -182,13 +175,11 @@ static uint16_t tcp_close_eventhandler(FAR struct net_driver_s *dev,
   return flags;
 
 end_wait:
-  conn->clscb->flags = 0;
-  conn->clscb->priv  = NULL;
-  conn->clscb->event = NULL;
+  tcp_callback_free(conn, conn->clscb);
 
   /* Free network resources */
 
-  work_queue(LPWORK, &conn->clswork, tcp_close_work, conn, 0);
+  work_queue(LPWORK, &conn->work, tcp_close_work, conn, 0);
 
   return flags;
 }
@@ -298,6 +289,10 @@ static inline int tcp_close_disconnect(FAR struct socket *psock)
     }
 #endif
 
+  /* Discard our reference to the connection */
+
+  conn->crefs = 0;
+
   /* TCP_ESTABLISHED
    *   We need to initiate an active close and wait for its completion.
    *
@@ -312,9 +307,9 @@ static inline int tcp_close_disconnect(FAR struct socket *psock)
     {
       /* Set up to receive TCP data event callbacks */
 
-      conn->clscb->flags = (TCP_NEWDATA | TCP_POLL | TCP_DISCONN_EVENTS);
+      conn->clscb->flags = TCP_NEWDATA | TCP_POLL | TCP_DISCONN_EVENTS;
       conn->clscb->event = tcp_close_eventhandler;
-      conn->clscb->priv  = conn;
+      conn->clscb->priv  = conn; /* reference for event handler to free cb */
 
       /* Notify the device driver of the availability of TX data */
 
@@ -330,6 +325,8 @@ static inline int tcp_close_disconnect(FAR struct socket *psock)
 
       tcp_free(conn);
     }
+
+  psock->s_conn = NULL;
 
   net_unlock();
   return ret;

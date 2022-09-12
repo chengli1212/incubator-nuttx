@@ -252,8 +252,6 @@ static void bcmf_receive(FAR struct bcmf_dev_s *priv)
       priv->bc_dev.d_buf = frame->data;
       priv->bc_dev.d_len = frame->len - (frame->data - frame->base);
 
-      wlinfo("Got frame %p %d\n", frame, priv->bc_dev.d_len);
-
 #ifdef CONFIG_NET_PKT
       /* When packet sockets are enabled, feed the frame into the tap */
 
@@ -269,6 +267,8 @@ static void bcmf_receive(FAR struct bcmf_dev_s *priv)
            * ethertype. The VLAN ID and priority fields are currently
            * ignored.
            */
+
+          /* ### TODO ### Implement VLAN support */
 
           uint8_t temp_buffer[12];
           memcpy(temp_buffer, frame->data, 12);
@@ -733,6 +733,8 @@ errout_in_critical_section:
 
   leave_critical_section(flags);
 
+  wlinfo("bcmf_ifup done: %d\n", ret);
+
   return ret;
 }
 
@@ -1079,7 +1081,7 @@ static int bcmf_ioctl(FAR struct net_driver_s *dev, int cmd,
 
   if (!priv->bc_bifup)
     {
-      wlerr("ERROR: invaild state "
+      wlerr("ERROR: invalid state "
             "(IFF_DOWN, unable to execute command: %x)\n", cmd);
       return -EPERM;
     }

@@ -258,21 +258,25 @@ struct net_driver_s
 
   /* Link layer address */
 
+#if defined(CONFIG_NET_ETHERNET) || defined(CONFIG_NET_6LOWPAN) || \
+    defined(CONFIG_NET_BLUETOOTH) || defined(CONFIG_NET_IEEE802154) || \
+    defined(CONFIG_NET_TUN)
   union
   {
-#ifdef CONFIG_NET_ETHERNET
+# if defined(CONFIG_NET_ETHERNET) || defined(CONFIG_NET_TUN)
     /* Ethernet device identity */
 
     struct ether_addr ether;    /* Device Ethernet MAC address */
-#endif
+# endif
 
-#if defined(CONFIG_NET_6LOWPAN) || defined(CONFIG_NET_BLUETOOTH) || \
+# if defined(CONFIG_NET_6LOWPAN) || defined(CONFIG_NET_BLUETOOTH) || \
     defined(CONFIG_NET_IEEE802154)
   /* The address assigned to an IEEE 802.15.4 or generic packet radio. */
 
     struct netdev_varaddr_s radio;
-#endif
+# endif
   } d_mac;
+#endif
 
   /* Network identity */
 
@@ -600,8 +604,8 @@ int devif_loopback(FAR struct net_driver_s *dev);
  *
  ****************************************************************************/
 
-void netdev_ifup(FAR struct net_driver_s *dev);
-void netdev_ifdown(FAR struct net_driver_s *dev);
+int netdev_ifup(FAR struct net_driver_s *dev);
+int netdev_ifdown(FAR struct net_driver_s *dev);
 
 /****************************************************************************
  * Carrier detection
@@ -616,23 +620,6 @@ void netdev_ifdown(FAR struct net_driver_s *dev);
 
 int netdev_carrier_on(FAR struct net_driver_s *dev);
 int netdev_carrier_off(FAR struct net_driver_s *dev);
-
-/****************************************************************************
- * Name: net_ioctl_arglen
- *
- * Description:
- *   Calculate the ioctl argument buffer length.
- *
- * Input Parameters:
- *
- *   cmd      The ioctl command
- *
- * Returned Value:
- *   The argument buffer length, or error code.
- *
- ****************************************************************************/
-
-ssize_t net_ioctl_arglen(int cmd);
 
 /****************************************************************************
  * Name: net_chksum
